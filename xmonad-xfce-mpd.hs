@@ -169,22 +169,6 @@ setVolume d = do
 _action :: MonadIO m => (MPD.MPD ()) -> m()
 _action a = io $ return . fromRight =<< MPD.withMPD a
 
-int2str :: (Show a, Num a, Ord a) => a -> String
-int2str x = if x < 10 then '0':sx else sx where sx = show x
-
-parseMPDVolume :: MPD.Response MPD.Status -> [[String]]
-parseMPDVolume (Left e) = return $ show e:repeat ""
-parseMPDVolume (Right st) = do
-     return [vol]
-     where
-          vol = int2str $ MPD.stVolume st
-
-parseVolume :: [[String]] -> String
-parseVolume vol = (unwords (foldr1 (++) (vol)))
-
-_mpdvolume :: MPD.Response MPD.Status -> String
-_mpdvolume st = parseVolume (parseMPDVolume st)
-
 myKeys conf@(XConfig {XMonad.modMask = modm}) =
     [ ((modm, xK_b), sendMessage ToggleStruts)
 	, ((mod1Mask, xK_F4), kill)
