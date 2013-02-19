@@ -8,7 +8,8 @@
      PatternGuards,
      ScopedTypeVariables,
      TypeSynonymInstances,
-     UndecidableInstances
+     UndecidableInstances,
+     OverloadedStrings
      #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
  
@@ -16,8 +17,12 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Instances ()
 import Control.Monad.Writer
+import Control.Monad.Trans (liftIO)
 import Data.List
+import Data.Int
 import Data.Maybe
+import Data.Either
+import Data.Either.Utils
 import Data.Traversable(traverse)
 import Graphics.X11.Xinerama
 import qualified Data.Map as M
@@ -80,6 +85,10 @@ import XMonad.Actions.GridSelect
 import System.Process
 import Prelude
 import Text.Regex.Posix
+import qualified Network.MPD as MPD
+import qualified Network.MPD.Commands.Extensions as MPD
+import DBus
+import DBus.Client
 
 -- display
 -- replace the bright red border with a more stylish colour
@@ -108,8 +117,6 @@ myManageHook =  composeAll
 									doFloat
 									doF $ W.shift "games")	
 				, className =? "Xfce4-panel"					--> doFloat
---                , className =? "Java"							--> doFullFloat
---                , className =? "com-sun-javaws-Main"			--> doFloat
 				, title     =? "EPresent"       				--> doFloat
 				, isFullscreen                  				--> doFullFloat
 				, isDialog										--> doFloat
@@ -149,49 +156,71 @@ myManageHook =  composeAll
                 		className =? "xfce4-netload-plugin",
                 		className =? "xfce4-mixer"
                 		]
-			isDesktop = foldr1(<||>) [ className =? "Xfdesktop", className =? "xfdesktop" ]
+			isDesktop = foldr1 (<||>) [ className =? "Xfdesktop", className =? "xfdesktop" ]
 
 myWorkspaces = ["inet", "misc", "torrents", "office", "fm", "games", "dev", "adm", "stuff"]
 
 setVolume :: MonadIO m => String -> m()
-
 setVolume d = do
-	runProcessWithInput "rhythmbox-client" ["--no-start", "--no-present", d] []
-	volume <- runProcessWithInput "rhythmbox-client" ["--print-volume"] []
-	safeSpawn "notify-send" ["-t", "5000", "Player volume", (volume =~ "([,.0-9]+)$" :: String) =~ "^[0-9]+[.,][0-9]+" :: String]
- 
+	t <- runProcessWithInput "mpc" ["volume", d] []
+	volume <- runProcessWithInput "mpc" ["volume"] []
+	safeSpawn "notify-send" ["-t", "5000", "MPD", volume]
+
+_action :: MonadIO m => (MPD.MPD ()) -> m()
+_action a = io $ return . fromRight =<< MPD.withMPD a
+
+int2str :: (Show a, Num a, Ord a) => a -> String
+int2str x = if x < 10 then '0':sx else sx where sx = show x
+
+parseMPDVolume :: MPD.Response MPD.Status -> [[String]]
+parseMPDVolume (Left e) = return $ show e:repeat ""
+parseMPDVolume (Right st) = do
+     return [vol]
+     where
+          vol = int2str $ MPD.stVolume st
+
+parseVolume :: [[String]] -> String
+parseVolume vol = (unwords (foldr1 (++) (vol)))
+
+_mpdvolume :: MPD.Response MPD.Status -> String
+_mpdvolume st = parseVolume (parseMPDVolume st)
+
 myKeys conf@(XConfig {XMonad.modMask = modm}) =
     [ ((modm, xK_b), sendMessage ToggleStruts)
 	, ((mod1Mask, xK_F4), kill)
-	, ((controlMask, xK_Print), spawn "sleep 0.2; scrot -s")
+	, ((controlMask, xK_Print), spawn "sleep 1; scrot -s")
 	, ((0, xK_Print), spawn "scrot")
 	, ((modm, xK_l), spawn "xflock4")
 	, ((mod4Mask .|. shiftMask, xK_l), spawn "xfce4-session-logout")
-	, ((modm, xK_x), safeSpawn "rhythmbox-client" ["--no-present", "--play-pause"])
-	, ((modm, xK_v), safeSpawn "rhythmbox-client" ["--no-start", "--no-present", "--next"])
-	, ((modm, xK_z), safeSpawn "rhythmbox-client" ["--no-start", "--no-present", "--previous"])
-	, ((modm, xK_c), safeSpawn "rhythmbox-client" ["--no-start", "--no-present", "--seek", "0:00"])
-	, ((modm, xK_a), setVolume "--volume-down")
-	, ((modm, xK_s), setVolume "--volume-up")
+	, ((modm, xK_x), _action MPD.toggle)
+	, ((modm, xK_v), _action MPD.next)
+	, ((modm, xK_z), _action MPD.previous)
+	, ((modm, xK_c), _action MPD.stop)
+	, ((modm, xK_d), io $ return . fromRight =<< MPD.withMPD (MPD.update []))
+	, ((modm, xK_a), setVolume "-2")
+	, ((modm, xK_s), setVolume "+2")
 	, ((modm, xK_bracketleft), sendMessage Shrink)
 	, ((modm, xK_bracketright), sendMessage Expand)
 	, ((mod4Mask .|. mod1Mask, xK_l), windowPromptGoto defaultXPConfig { autoComplete = Just 500000 })
 	, ((mod4Mask, xK_g), goToSelected defaultGSConfig)
     ] -- Mod-b: toggle XFCE panel
+
 keysToRemove :: XConfig Layout -> [(KeyMask, KeySym)]
 keysToRemove x = [ (mod4Mask, xK_l ), (mod4Mask, xK_h ) ]
 newKeys x  = M.union (foldr M.delete (keys xfceConfig x) (keysToRemove x)) (M.fromList (myKeys x))
 
+initMPD :: MonadIO m => m ()
+initMPD = do
+	let x = MPD.withMPD $ MPD.random True
+	let y = MPD.withMPD $ MPD.update []
+	return ()
+
 startup :: X ()
 startup = do
+	initMPD
 	safeSpawn "sudo" ["ntpdate", "192.168.254.1"]
 	safeSpawn "pkill" ["xfdesktop"]
 	safeSpawn "nautilus" ["-n"]
-	
-
---myBar = "xmobar"
---myPP = xmobarPP { ppCurrent = xmobarColor "#429942" "" . wrap "<" ">" }
---myLogHook = dynamicLogWithPP myPP
 
 toggleStrutsKey XConfig {XMonad.modMask = modMask} = (modMask, xK_b)
 
@@ -205,14 +234,12 @@ myLayout =
           m = named "M"
             . avoidStruts $ layoutHook defaultConfig
 
---main = xmonad =<< statusBar myBar myPP toggleStrutsKey xfceConfig
 main = do
 	args <- getArgs
 	when ("--replace" `elem` args) replace
 	xmonad $ xfceConfig { modMask = mod4Mask   -- use the super key for xmonad commands
    	   , manageHook = manageDocks <+> myManageHook
    	   , keys = newKeys
---   	   , layoutHook = avoidStruts $ layoutHook defaultConfig
    	   , layoutHook = myLayout
    	   , startupHook = startup <+> ewmhDesktopsStartup >> setWMName "LG3D"
    	   , workspaces = myWorkspaces
