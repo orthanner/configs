@@ -9,7 +9,8 @@
      ScopedTypeVariables,
      TypeSynonymInstances,
      UndecidableInstances,
-     OverloadedStrings
+     OverloadedStrings,
+     RankNTypes
      #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
  
@@ -160,14 +161,29 @@ myManageHook =  composeAll
 
 myWorkspaces = ["inet", "misc", "torrents", "office", "fm", "games", "dev", "adm", "stuff"]
 
-setVolume :: MonadIO m => String -> m()
+int2str :: (Show a, Num a, Ord a) => a -> String
+int2str x = if x < 10 then '0':sx else sx where sx = show x
+
+parseMPD :: MPD.Response MPD.Status -> [[String]]
+parseMPD (Left e) = return $ show e:repeat ""
+parseMPD (Right st) = do
+     return [vol, "%"]
+     where
+          vol = int2str $ MPD.stVolume st
+
+volume = do
+	x <- MPD.withMPD $ MPD.status
+	let a = unwords (foldr1 (++) (parseMPD x))
+	safeSpawn "notify-send" ["MPD Volume", a]
+
+setVolume :: MonadIO m => Int -> m()
 setVolume d = do
-	t <- runProcessWithInput "mpc" ["volume", d] []
-	volume <- runProcessWithInput "mpc" ["volume"] []
-	safeSpawn "notify-send" ["-t", "5000", "MPD", volume]
+	_action $ MPD.volume d
+	io $ volume
 
 _action :: MonadIO m => (MPD.MPD ()) -> m()
-_action a = io $ return . fromRight =<< MPD.withMPD a
+_action a = do
+    io $ return . fromRight =<< MPD.withMPD a
 
 myKeys conf@(XConfig {XMonad.modMask = modm}) =
     [ ((modm, xK_b), sendMessage ToggleStruts)
@@ -180,9 +196,10 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
 	, ((modm, xK_v), _action MPD.next)
 	, ((modm, xK_z), _action MPD.previous)
 	, ((modm, xK_c), _action MPD.stop)
+	, ((modm, xK_f), io $ volume)
 	, ((modm, xK_d), io $ return . fromRight =<< MPD.withMPD (MPD.update []))
-	, ((modm, xK_a), setVolume "-2")
-	, ((modm, xK_s), setVolume "+2")
+	, ((modm, xK_a), setVolume (-2))
+	, ((modm, xK_s), setVolume 2)
 	, ((modm, xK_bracketleft), sendMessage Shrink)
 	, ((modm, xK_bracketright), sendMessage Expand)
 	, ((mod4Mask .|. mod1Mask, xK_l), windowPromptGoto defaultXPConfig { autoComplete = Just 500000 })
