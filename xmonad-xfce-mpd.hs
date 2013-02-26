@@ -196,7 +196,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
 	, ((modm, xK_v), _action MPD.next)
 	, ((modm, xK_z), _action MPD.previous)
 	, ((modm, xK_c), _action MPD.stop)
-	, ((modm, xK_f), io $ volume)
 	, ((modm, xK_d), io $ return . fromRight =<< MPD.withMPD (MPD.update []))
 	, ((modm, xK_a), setVolume (-2))
 	, ((modm, xK_s), setVolume 2)
