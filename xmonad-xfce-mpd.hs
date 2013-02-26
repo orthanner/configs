@@ -102,8 +102,8 @@ basicLayout = Tall nmaster delta ratio where
     nmaster = 1
     delta   = 1/100
     ratio   = 4/5
-tallLayout = named "tall" $ avoidStruts $ basicLayout
-wideLayout = named "wide" $ avoidStruts $ basicLayout
+tallLayout	= named "tall" $ avoidStruts $ basicLayout
+wideLayout	= named "wide" $ avoidStruts $ basicLayout
 singleLayout = named "single" $ avoidStruts $ noBorders Full
 
 myManageHook =  composeAll
@@ -167,9 +167,9 @@ int2str x = if x < 10 then '0':sx else sx where sx = show x
 parseMPD :: MPD.Response MPD.Status -> [[String]]
 parseMPD (Left e) = return $ show e:repeat ""
 parseMPD (Right st) = do
-     return [vol, "%"]
-     where
-          vol = int2str $ MPD.stVolume st
+	return [vol, "%"]
+	where
+		vol = int2str $ MPD.stVolume st
 
 volume = do
 	x <- MPD.withMPD $ MPD.status
@@ -225,14 +225,14 @@ startup = do
 toggleStrutsKey XConfig {XMonad.modMask = modMask} = (modMask, xK_b)
 
 myLayout =
-         trackFloating . smartBorders . avoidStruts
-         . onWorkspace "inet" (avoidStruts $ layoutHook defaultConfig)
-         . onWorkspace "stuff" (Full)
-         . onWorkspace "games" (noBorders Full)
-         $ m ||| named "F" (noBorders Full)
+		trackFloating . smartBorders . avoidStruts
+		. onWorkspace "inet" (avoidStruts $ layoutHook defaultConfig)
+		. onWorkspace "stuff" (Full)
+		. onWorkspace "games" (noBorders Full)
+		$ m ||| named "F" (noBorders Full)
     where nav = configurableNavigation (navigateColor "#ffff00")
-          m = named "M"
-            . avoidStruts $ layoutHook defaultConfig
+        m = named "M"
+        	. avoidStruts $ layoutHook defaultConfig
 
 main = do
 	args <- getArgs
